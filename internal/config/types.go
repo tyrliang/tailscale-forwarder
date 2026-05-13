@@ -4,6 +4,7 @@ type connectionMapping struct {
 	SourcePort int
 	TargetAddr string
 	TargetPort int
+	HTTPS      bool
 }
 
 type config struct {
