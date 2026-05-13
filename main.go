@@ -17,6 +17,8 @@ import (
 )
 
 func main() {
+	config.Load()
+
 	ts := &tsnet.Server{
 		Hostname:     config.Cfg.TSHostname,
 		AuthKey:      config.Cfg.TSAuthKey,
@@ -52,19 +54,20 @@ func main() {
 	wg := sync.WaitGroup{}
 
 	for _, mapping := range config.Cfg.ConnectionMappings {
-		listener, err := ts.Listen("tcp", fmt.Sprintf(":%d", mapping.SourcePort))
+		listener, err := tailscaleListen(ts, mapping.SourcePort, mapping.HTTPS)
 		if err != nil {
-			logger.Stderr.Error("failed to start local listener", slog.Int("source_port", mapping.SourcePort), logger.ErrAttr(err))
+			logger.Stderr.Error("failed to start local listener",
+				slog.Int("source_port", mapping.SourcePort),
+				slog.Bool("https", mapping.HTTPS),
+				logger.ErrAttr(err),
+			)
 			os.Exit(1)
 		}
 
-		wg.Add(1)
-
-		go func() {
-			defer wg.Done()
-
+		wg.Go(func() {
 			logger.Stdout.Info("listening for connections",
 				slog.Int("source_port", mapping.SourcePort),
+				slog.Bool("https", mapping.HTTPS),
 				slog.String("target_addr", mapping.TargetAddr),
 				slog.Int("target_port", mapping.TargetPort),
 			)
@@ -95,8 +98,18 @@ func main() {
 					}
 				}()
 			}
-		}()
+		})
 	}
 
 	wg.Wait()
+}
+
+func tailscaleListen(ts *tsnet.Server, sourcePort int, https bool) (net.Listener, error) {
+	addr := fmt.Sprintf(":%d", sourcePort)
+
+	if https {
+		return ts.ListenTLS("tcp", addr)
+	}
+
+	return ts.Listen("tcp", addr)
 }

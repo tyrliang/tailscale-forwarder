@@ -12,7 +12,7 @@ import (
 
 var Cfg = config{}
 
-func init() {
+func Load() {
 	var errs []error
 
 	if err := env.Parse(&Cfg); err != nil {
@@ -23,7 +23,7 @@ func init() {
 		}
 	}
 
-	connectionMappings, err := parseConnectionMappingsFromEnv("CONNECTION_MAPPING_")
+	connectionMappings, err := parseConnectionMappings("CONNECTION_MAPPING_", os.Environ())
 	if err != nil {
 		errs = append(errs, err)
 	}

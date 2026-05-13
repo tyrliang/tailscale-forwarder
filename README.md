@@ -24,7 +24,9 @@ This also solves for the issue that you can only run one Tailscale subnet router
 
    `CONNECTION_MAPPING_01=5432:${{Postgres.RAILWAY_PRIVATE_DOMAIN}}:${{Postgres.PGPORT}}`
 
-   The format is `<Source Port>:<Target Host>:<Target Port>`.
+   The format is `[<Protocol>:]<Source Port>:<Target Host>:<Target Port>`.
+
+   The optional `https:` protocol prefix enables TLS termination on the Tailscale side for that specific mapping. If omitted, the listener is a plain TCP listener.
 
    Note: You can set multiple connection mappings by incrementing the `CONNECTION_MAPPING_` prefix.
 
@@ -46,10 +48,25 @@ This also solves for the issue that you can only run one Tailscale subnet router
 | ------------------------ | :------: | ----------------------------------------------------------------------------------- | -------------------------------------------------------------- |
 | `TS_AUTHKEY`             | Yes      | -                                                                                   | Tailscale auth key.                                            |
 | `TS_HOSTNAME`            | Yes      | `${{RAILWAY_PROJECT_NAME}}-${{RAILWAY_ENVIRONMENT_NAME}}-${{RAILWAY_SERVICE_NAME}}` | Hostname to use for the Tailscale machine.                     |
-| `CONNECTION_MAPPING_[n]` | Yes      | -                                                                                   | Connection mapping for a service.                              |
+| `CONNECTION_MAPPING_[n]` | Yes      | -                                                                                   | `[https:]<source>:<target_host>:<target>` per service mapping. |
 | `TS_CONTROL_URL`         | No       | -                                                                                   | Control server URL (e.g. a self-hosted Headscale). Leave unset to use Tailscale's default control plane. |
 | `TS_STATE_DIR`           | No       | -                                                                                   | Directory path for persisting Tailscale state across restarts. |
 | `TS_EPHEMERAL`           | No       | `true`                                                                              | Set to `false` to persist the node in your tailnet.            |
+
+### HTTPS Support
+
+Prefix the mapping with `https:` to terminate TLS on the Tailscale side using certificates provisioned through Tailscale's local client certificate flow.
+
+Example:
+
+```shell
+CONNECTION_MAPPING_01=https:443:${{Web Server.RAILWAY_PRIVATE_DOMAIN}}:${{Web Server.PORT}}
+```
+
+Notes:
+- The `https:` prefix is per mapping (case insensitive). Without it, the listener is a plain TCP listener.
+- Clients must connect with TLS for mappings configured with `https:`.
+- Your tailnet must have MagicDNS and HTTPS enabled.
 
 ### State Persistence
 
