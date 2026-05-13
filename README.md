@@ -47,6 +47,7 @@ This also solves for the issue that you can only run one Tailscale subnet router
 | `TS_AUTHKEY`             | Yes      | -                                                                                   | Tailscale auth key.                                            |
 | `TS_HOSTNAME`            | Yes      | `${{RAILWAY_PROJECT_NAME}}-${{RAILWAY_ENVIRONMENT_NAME}}-${{RAILWAY_SERVICE_NAME}}` | Hostname to use for the Tailscale machine.                     |
 | `CONNECTION_MAPPING_[n]` | Yes      | -                                                                                   | Connection mapping for a service.                              |
+| `TS_CONTROL_URL`         | No       | -                                                                                   | Control server URL (e.g. a self-hosted Headscale). Leave unset to use Tailscale's default control plane. |
 | `TS_STATE_DIR`           | No       | -                                                                                   | Directory path for persisting Tailscale state across restarts. |
 | `TS_EPHEMERAL`           | No       | `true`                                                                              | Set to `false` to persist the node in your tailnet.            |
 
