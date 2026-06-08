@@ -43,7 +43,7 @@ func main() {
 
 	defer ts.Close()
 
-	logger.Stdout.Info("🚀 Starting tailscale_fwdr",
+	logger.Stdout.Info("Starting tailscale_fwdr",
 		slog.String("ts-hostname", config.Cfg.TSHostname),
 		slog.String("ts-control-url", config.Cfg.TSControlURL),
 		slog.String("ts-state-dir", config.Cfg.TSStateDir),

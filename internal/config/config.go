@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"strconv"
 
 	"main/internal/logger"
 	"main/internal/util"
@@ -46,4 +47,8 @@ func Load() {
 		logger.StderrWithSource.Error("configuration error(s) found", logger.ErrorsAttr(errs...))
 		os.Exit(1)
 	}
+
+	// Tailscale reads TS_DEBUG_MTU directly from the environment when bringing
+	// the network up, so write the resolved value back for it to pick up.
+	os.Setenv("TS_DEBUG_MTU", strconv.Itoa(Cfg.TSDebugMTU))
 }
