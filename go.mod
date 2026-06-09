@@ -4,6 +4,7 @@ go 1.26.4
 
 require (
 	github.com/caarlos0/env/v11 v11.4.1
+	gvisor.dev/gvisor v0.0.0-20260604230326-c7dbb92365cd
 	tailscale.com v1.100.0
 )
 
@@ -56,5 +57,4 @@ require (
 	golang.org/x/time v0.15.0 // indirect
 	golang.zx2c4.com/wintun v0.0.0-20230126152724-0fa3db229ce2 // indirect
 	golang.zx2c4.com/wireguard/windows v1.0.1 // indirect
-	gvisor.dev/gvisor v0.0.0-20260604230326-c7dbb92365cd // indirect
 )

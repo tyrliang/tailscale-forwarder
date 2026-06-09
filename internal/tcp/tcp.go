@@ -1,4 +1,4 @@
-package main
+package tcp
 
 import (
 	"fmt"
@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-func fwdTCP(sourceConn net.Conn, targetAddr string, targetPort int) error {
+func Forward(sourceConn net.Conn, targetAddr string, targetPort int) error {
 	defer sourceConn.Close()
 
 	targetConn, err := net.Dial("tcp", net.JoinHostPort(targetAddr, fmt.Sprintf("%d", targetPort)))
@@ -32,20 +32,31 @@ func fwdTCP(sourceConn net.Conn, targetAddr string, targetPort int) error {
 		})
 	}
 
-	var wg sync.WaitGroup
+	var (
+		wg      sync.WaitGroup
+		errOnce sync.Once
+		copyErr error
+	)
 
 	wg.Add(2)
 
 	pipe := func(dst, src net.Conn) {
 		defer wg.Done()
 		defer closeBoth()
-		io.Copy(dst, src)
+
+		if _, err := io.Copy(dst, src); err != nil && !isExpectedCopyError(err) {
+			errOnce.Do(func() { copyErr = err })
+		}
 	}
 
 	go pipe(targetConn, sourceConn)
 	go pipe(sourceConn, targetConn)
 
 	wg.Wait()
+
+	if copyErr != nil {
+		return fmt.Errorf("failed to copy data: %w", copyErr)
+	}
 
 	return nil
 }
