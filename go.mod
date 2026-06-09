@@ -4,8 +4,6 @@ go 1.26.4
 
 require (
 	github.com/caarlos0/env/v11 v11.4.1
-	github.com/northbright/iocopy v1.16.2
-	golang.org/x/sync v0.21.0
 	tailscale.com v1.100.0
 )
 
@@ -51,6 +49,7 @@ require (
 	golang.org/x/exp v0.0.0-20260603202125-055de637280b // indirect
 	golang.org/x/net v0.55.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
+	golang.org/x/sync v0.21.0 // indirect
 	golang.org/x/sys v0.46.0 // indirect
 	golang.org/x/term v0.44.0 // indirect
 	golang.org/x/text v0.38.0 // indirect

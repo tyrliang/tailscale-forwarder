@@ -1,23 +1,28 @@
 package main
 
 import (
-	"context"
+	"errors"
 	"fmt"
+	"io"
 	"main/internal/util"
 	"net"
+	"sync"
 	"time"
-
-	"github.com/northbright/iocopy"
-	"golang.org/x/sync/errgroup"
 )
+
+// copyBufSize is the per-direction buffer used when relaying data. Buffers are
+// pooled to avoid per-connection allocation under concurrent load.
+const copyBufSize = 64 * 1024
+
+var bufPool = sync.Pool{
+	New: func() any {
+		b := make([]byte, copyBufSize)
+		return &b
+	},
+}
 
 func fwdTCP(sourceConn net.Conn, targetAddr string, targetPort int) error {
 	defer sourceConn.Close()
-
-	if tcpConn, ok := sourceConn.(*net.TCPConn); ok {
-		tcpConn.SetKeepAlive(true)
-		tcpConn.SetKeepAlivePeriod(30 * time.Second)
-	}
 
 	targetConn, err := net.Dial("tcp", net.JoinHostPort(targetAddr, fmt.Sprintf("%d", targetPort)))
 	if err != nil {
@@ -31,44 +36,44 @@ func fwdTCP(sourceConn net.Conn, targetAddr string, targetPort int) error {
 		tcpConn.SetKeepAlivePeriod(30 * time.Second)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
+	// When either direction finishes — a graceful FIN, an RST, or any copy
+	// error — close both connections so the other goroutine's blocked Read
+	// returns immediately. This guarantees that when a client disconnects the
+	// matching upstream connection is torn down too, rather than leaking until
+	// the process restarts.
+	var once sync.Once
+	closeBoth := func() {
+		once.Do(func() {
+			sourceConn.Close()
+			targetConn.Close()
+		})
+	}
 
-	g, ctx := errgroup.WithContext(ctx)
+	var (
+		wg   sync.WaitGroup
+		errs [2]error
+	)
 
-	g.Go(func() error {
-		defer cancel()
+	wg.Add(2)
 
-		defer func() {
-			if tcpConn, ok := targetConn.(*net.TCPConn); ok {
-				tcpConn.CloseWrite()
-			}
-		}()
+	pipe := func(i int, dst, src net.Conn) {
+		defer wg.Done()
+		defer closeBoth()
 
-		if _, err := iocopy.Copy(ctx, targetConn, sourceConn); err != nil && !util.IsExpectedCopyError(err) {
-			return fmt.Errorf("failed to copy data to target: %w", err)
+		buf := bufPool.Get().(*[]byte)
+		defer bufPool.Put(buf)
+
+		if _, err := io.CopyBuffer(dst, src, *buf); err != nil && !util.IsExpectedCopyError(err) {
+			errs[i] = err
 		}
+	}
 
-		return nil
-	})
+	go pipe(0, targetConn, sourceConn)
+	go pipe(1, sourceConn, targetConn)
 
-	g.Go(func() error {
-		defer cancel()
+	wg.Wait()
 
-		defer func() {
-			if tcpConn, ok := sourceConn.(*net.TCPConn); ok {
-				tcpConn.CloseWrite()
-			}
-		}()
-
-		if _, err := iocopy.Copy(ctx, sourceConn, targetConn); err != nil && !util.IsExpectedCopyError(err) {
-			return fmt.Errorf("failed to copy data from source: %w", err)
-		}
-
-		return nil
-	})
-
-	if err := g.Wait(); err != nil {
+	if err := errors.Join(errs[0], errs[1]); err != nil {
 		return fmt.Errorf("connection error: %w", err)
 	}
 
