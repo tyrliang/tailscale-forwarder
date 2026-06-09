@@ -2,16 +2,14 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
-	"net"
 	"os"
 	"sync"
-	"syscall"
 
 	"main/internal/config"
 	"main/internal/logger"
+	"main/internal/tcp"
 
 	"tailscale.com/tsnet"
 )
@@ -54,7 +52,13 @@ func main() {
 	wg := sync.WaitGroup{}
 
 	for _, mapping := range config.Cfg.ConnectionMappings {
-		listener, err := tailscaleListen(ts, mapping.SourcePort, mapping.HTTPS)
+		listen := ts.Listen
+
+		if mapping.HTTPS {
+			listen = ts.ListenTLS
+		}
+
+		listener, err := listen("tcp", fmt.Sprintf(":%d", mapping.SourcePort))
 		if err != nil {
 			logger.Stderr.Error("failed to start local listener",
 				slog.Int("source_port", mapping.SourcePort),
@@ -84,11 +88,7 @@ func main() {
 				}
 
 				go func() {
-					if err := fwdTCP(sourceConn, mapping.TargetAddr, mapping.TargetPort); err != nil {
-						if errors.Is(err, net.ErrClosed) || errors.Is(err, syscall.ECONNRESET) {
-							return
-						}
-
+					if err := tcp.Forward(sourceConn, mapping.TargetAddr, mapping.TargetPort); err != nil {
 						logger.Stderr.Error("failed to forward connection",
 							slog.Int("source_port", mapping.SourcePort),
 							slog.String("target_addr", mapping.TargetAddr),
@@ -102,14 +102,4 @@ func main() {
 	}
 
 	wg.Wait()
-}
-
-func tailscaleListen(ts *tsnet.Server, sourcePort int, https bool) (net.Listener, error) {
-	addr := fmt.Sprintf(":%d", sourcePort)
-
-	if https {
-		return ts.ListenTLS("tcp", addr)
-	}
-
-	return ts.Listen("tcp", addr)
 }
