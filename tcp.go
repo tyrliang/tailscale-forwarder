@@ -10,17 +10,6 @@ import (
 	"time"
 )
 
-// copyBufSize is the per-direction buffer used when relaying data. Buffers are
-// pooled to avoid per-connection allocation under concurrent load.
-const copyBufSize = 64 * 1024
-
-var bufPool = sync.Pool{
-	New: func() any {
-		b := make([]byte, copyBufSize)
-		return &b
-	},
-}
-
 func fwdTCP(sourceConn net.Conn, targetAddr string, targetPort int) error {
 	defer sourceConn.Close()
 
@@ -60,10 +49,7 @@ func fwdTCP(sourceConn net.Conn, targetAddr string, targetPort int) error {
 		defer wg.Done()
 		defer closeBoth()
 
-		buf := bufPool.Get().(*[]byte)
-		defer bufPool.Put(buf)
-
-		if _, err := io.CopyBuffer(dst, src, *buf); err != nil && !util.IsExpectedCopyError(err) {
+		if _, err := io.Copy(dst, src); err != nil && !util.IsExpectedCopyError(err) {
 			errs[i] = err
 		}
 	}
