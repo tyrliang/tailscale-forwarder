@@ -2,13 +2,11 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"net"
 	"os"
 	"sync"
-	"syscall"
 
 	"main/internal/config"
 	"main/internal/logger"
@@ -85,10 +83,6 @@ func main() {
 
 				go func() {
 					if err := fwdTCP(sourceConn, mapping.TargetAddr, mapping.TargetPort); err != nil {
-						if errors.Is(err, net.ErrClosed) || errors.Is(err, syscall.ECONNRESET) {
-							return
-						}
-
 						logger.Stderr.Error("failed to forward connection",
 							slog.Int("source_port", mapping.SourcePort),
 							slog.String("target_addr", mapping.TargetAddr),

@@ -1,10 +1,8 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"io"
-	"main/internal/util"
 	"net"
 	"sync"
 	"time"
@@ -25,12 +23,8 @@ func fwdTCP(sourceConn net.Conn, targetAddr string, targetPort int) error {
 		tcpConn.SetKeepAlivePeriod(30 * time.Second)
 	}
 
-	// When either direction finishes — a graceful FIN, an RST, or any copy
-	// error — close both connections so the other goroutine's blocked Read
-	// returns immediately. This guarantees that when a client disconnects the
-	// matching upstream connection is torn down too, rather than leaking until
-	// the process restarts.
-	var once sync.Once
+	once := sync.Once{}
+
 	closeBoth := func() {
 		once.Do(func() {
 			sourceConn.Close()
@@ -38,30 +32,20 @@ func fwdTCP(sourceConn net.Conn, targetAddr string, targetPort int) error {
 		})
 	}
 
-	var (
-		wg   sync.WaitGroup
-		errs [2]error
-	)
+	var wg sync.WaitGroup
 
 	wg.Add(2)
 
-	pipe := func(i int, dst, src net.Conn) {
+	pipe := func(dst, src net.Conn) {
 		defer wg.Done()
 		defer closeBoth()
-
-		if _, err := io.Copy(dst, src); err != nil && !util.IsExpectedCopyError(err) {
-			errs[i] = err
-		}
+		io.Copy(dst, src)
 	}
 
-	go pipe(0, targetConn, sourceConn)
-	go pipe(1, sourceConn, targetConn)
+	go pipe(targetConn, sourceConn)
+	go pipe(sourceConn, targetConn)
 
 	wg.Wait()
-
-	if err := errors.Join(errs[0], errs[1]); err != nil {
-		return fmt.Errorf("connection error: %w", err)
-	}
 
 	return nil
 }
