@@ -20,5 +20,6 @@ type config struct {
 	// that fits within common constrained paths.
 	TSDebugMTU int `env:"TS_DEBUG_MTU" envDefault:"1230"`
 
-	ConnectionMappings []connectionMapping
+	ConnectionMappings       []connectionMapping
+	EgressConnectionMappings []connectionMapping
 }

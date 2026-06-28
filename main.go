@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net"
 	"os"
 	"sync"
 
@@ -47,6 +48,7 @@ func main() {
 		slog.String("ts-state-dir", config.Cfg.TSStateDir),
 		slog.Bool("ts-ephemeral", config.Cfg.TSEphemeral),
 		slog.Any("connection-mappings", config.Cfg.ConnectionMappings),
+		slog.Any("egress-connection-mappings", config.Cfg.EgressConnectionMappings),
 	)
 
 	wg := sync.WaitGroup{}
@@ -101,5 +103,47 @@ func main() {
 		})
 	}
 
+
+	for _, mapping := range config.Cfg.EgressConnectionMappings {
+		listener, err := net.Listen("tcp", fmt.Sprintf(":%d", mapping.SourcePort))
+		if err != nil {
+			logger.Stderr.Error("failed to start egress listener",
+				slog.Int("source_port", mapping.SourcePort),
+				logger.ErrAttr(err),
+			)
+			os.Exit(1)
+		}
+
+		wg.Go(func() {
+			logger.Stdout.Info("listening for egress connections",
+				slog.Int("source_port", mapping.SourcePort),
+				slog.String("target_addr", mapping.TargetAddr),
+				slog.Int("target_port", mapping.TargetPort),
+			)
+
+			for {
+				sourceConn, err := listener.Accept()
+				if err != nil {
+					logger.Stderr.Error("failed to accept egress connection",
+						slog.Int("source_port", mapping.SourcePort),
+						logger.ErrAttr(err),
+					)
+
+					continue
+				}
+
+				go func() {
+					if err := tcp.ForwardEgress(sourceConn, ts.Dial, mapping.TargetAddr, mapping.TargetPort); err != nil {
+						logger.Stderr.Error("failed to forward egress connection",
+							slog.Int("source_port", mapping.SourcePort),
+							slog.String("target_addr", mapping.TargetAddr),
+							slog.Int("target_port", mapping.TargetPort),
+							logger.ErrAttr(err),
+						)
+					}
+				}()
+			}
+		})
+	}
 	wg.Wait()
 }

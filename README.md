@@ -48,10 +48,13 @@ This also solves for the issue that you can only run one Tailscale subnet router
 | ------------------------ | :------: | ----------------------------------------------------------------------------------- | -------------------------------------------------------------- |
 | `TS_AUTHKEY`             | Yes      | -                                                                                   | Tailscale auth key.                                            |
 | `TS_HOSTNAME`            | Yes      | `${{RAILWAY_PROJECT_NAME}}-${{RAILWAY_ENVIRONMENT_NAME}}-${{RAILWAY_SERVICE_NAME}}` | Hostname to use for the Tailscale machine.                     |
-| `CONNECTION_MAPPING_[n]` | Yes      | -                                                                                   | `[https:]<source>:<target_host>:<target>` per service mapping. |
+| `CONNECTION_MAPPING_[n]`        | Yes*     | -                                                                                   | `[https:]<source>:<target_host>:<target>` inbound mapping. Listens on the Tailscale interface, dials Railway-internal targets. |
+| `EGRESS_CONNECTION_MAPPING_[n]` | Yes*     | -                                                                                   | `<source>:<target_host>:<target>` egress mapping. Listens on all interfaces (Railway private network), dials targets over Tailscale (MagicDNS resolved). |
 | `TS_CONTROL_URL`         | No       | -                                                                                   | Control server URL (e.g. a self-hosted Headscale). Leave unset to use Tailscale's default control plane. |
 | `TS_STATE_DIR`           | No       | -                                                                                   | Directory path for persisting Tailscale state across restarts. |
 | `TS_EPHEMERAL`           | No       | `true`                                                                              | Set to `false` to persist the node in your tailnet.            |
+
+\* At least one `CONNECTION_MAPPING_[n]` **or** `EGRESS_CONNECTION_MAPPING_[n]` is required.
 
 ### HTTPS Support
 
@@ -67,6 +70,33 @@ Notes:
 - The `https:` prefix is per mapping (case insensitive). Without it, the listener is a plain TCP listener.
 - Clients must connect with TLS for mappings configured with `https:`.
 - Your tailnet must have MagicDNS and HTTPS enabled.
+
+### Egress Mappings (Railway → Tailscale)
+
+`EGRESS_CONNECTION_MAPPING_[n]` is the reverse direction: it binds a listener on **all interfaces** (accessible from any service in the same Railway project via the private network), and dials the target address through the Tailscale network. This lets any Railway service in the same project reach a node on your tailnet without needing its own Tailscale node.
+
+Use case: a Railway app service (`hindsight-app.railway.internal`) needs to call an API that lives on your tailnet (e.g. a private LiteLLM proxy at `ai-proxy.baiji-cloud.ts.net`).
+
+**Setup:**
+
+1. Add an egress mapping to the forwarder service:
+
+   ```shell
+   EGRESS_CONNECTION_MAPPING_01=4000:ai-proxy.baiji-cloud.ts.net:443
+   ```
+
+2. In the app service, set the target URL to the forwarder's Railway private domain on that port:
+
+   ```shell
+   MY_API_BASE_URL=https://{{tailscale-forwarder.RAILWAY_PRIVATE_DOMAIN}}:4000
+   ```
+
+The forwarder resolves `ai-proxy.baiji-cloud.ts.net` via Tailscale MagicDNS and tunnels traffic through the WireGuard connection. The HTTPS session terminates end-to-end between the app and the real target — the forwarder only sees TCP bytes.
+
+**Notes:**
+- Source port binds on `0.0.0.0` — do not expose this service publicly on Railway.
+- No `https:` prefix is supported on egress mappings; the forwarder passes TCP bytes through opaquely.
+- Egress and inbound mappings can coexist on the same service instance.
 
 ### State Persistence
 
