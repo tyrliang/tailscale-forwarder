@@ -29,11 +29,17 @@ func Load() {
 		errs = append(errs, err)
 	}
 
-	if len(connectionMappings) == 0 && err == nil {
-		errs = append(errs, fmt.Errorf("required environment variable \"CONNECTION_MAPPING_[n]\" is not set"))
+	egressConnectionMappings, egressErr := parseConnectionMappings("EGRESS_CONNECTION_MAPPING_", os.Environ())
+	if egressErr != nil {
+		errs = append(errs, egressErr)
+	}
+
+	if len(connectionMappings) == 0 && len(egressConnectionMappings) == 0 && err == nil && egressErr == nil {
+		errs = append(errs, fmt.Errorf("at least one CONNECTION_MAPPING_[n] or EGRESS_CONNECTION_MAPPING_[n] is required"))
 	}
 
 	Cfg.ConnectionMappings = connectionMappings
+	Cfg.EgressConnectionMappings = egressConnectionMappings
 
 	sanitizedHostname := util.SanitizeString(Cfg.TSHostname)
 
